@@ -322,11 +322,12 @@ def create_vinted_embed(item: dict) -> Embed:
          embed.set_footer(text=f"Vendu par {item['user']['login']}")
     return embed
 
+# Remplacez l'ancienne fonction par celle-ci :
+
 async def vinted_monitor_task():
     """Tâche de fond qui surveille Vinted et poste les nouvelles annonces."""
     await bot.wait_until_ready()
     
-    # NOTE : Assurez-vous d'avoir les variables d'environnement VINTED
     channel_id = int(os.getenv("DISCORD_CHANNEL_ID"))
     search_url = os.getenv("VINTED_SEARCH_URL")
     delay = int(os.getenv("VINTED_DELAY_SECONDS"))
@@ -337,22 +338,35 @@ async def vinted_monitor_task():
         return
 
     vinted_client = VintedClient(search_url=search_url)
+    
+    # ===> PARTIE AJOUTÉE POUR CORRIGER L'ERREUR 403 <===
+    if not await vinted_client.initialize_session():
+        print("Échec de l'initialisation du client Vinted. Arrêt de la tâche.")
+        await channel.send("❌ Impossible de se connecter à Vinted pour le moment. Le moniteur n'a pas pu démarrer.")
+        return
+    # ===> FIN DE LA PARTIE AJOUTÉE <===
+    
     print(f"La surveillance Vinted va démarrer dans le salon #{channel.name}.")
 
-    while not bot.is_closed():
-        try:
-            new_items = await vinted_client.search_new_items()
-            if new_items:
-                for item in reversed(new_items):
-                    embed = create_vinted_embed(item)
-                    await channel.send(embed=embed)
-            await asyncio.sleep(delay)
-        except asyncio.CancelledError:
-            print("La tâche de surveillance Vinted a été arrêtée.")
-            break
-        except Exception as e:
-            print(f"ERREUR dans la boucle Vinted : {e}")
-            await asyncio.sleep(delay * 2)
+    # ===> AJOUT DE TRY...FINALLY POUR BIEN FERMER LA SESSION <===
+    try:
+        while not bot.is_closed():
+            try:
+                new_items = await vinted_client.search_new_items()
+                if new_items:
+                    for item in reversed(new_items):
+                        embed = create_vinted_embed(item)
+                        await channel.send(embed=embed)
+                await asyncio.sleep(delay)
+            except asyncio.CancelledError:
+                print("La tâche de surveillance Vinted a été arrêtée.")
+                break # Sort de la boucle while
+            except Exception as e:
+                print(f"ERREUR dans la boucle Vinted : {e}")
+                await asyncio.sleep(delay * 2)
+    finally:
+        await vinted_client.close_session()
+        print("Session Vinted fermée proprement.")
 
 @bot.command()
 async def start_vinted(ctx):
@@ -433,3 +447,4 @@ class MainStockButton(discord.ui.View):
 # Lancer le keep-alive avant le bot
 keep_alive()
 bot.run(TOKEN)
+
