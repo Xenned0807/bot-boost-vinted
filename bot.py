@@ -321,9 +321,8 @@ def create_vinted_embed(item: dict) -> Embed:
     if item.get('user'):
          embed.set_footer(text=f"Vendu par {item['user']['login']}")
     return embed
-
-# Remplacez l'ancienne fonction par celle-ci :
-
+    
+# Dans bot.py (à vérifier)
 async def vinted_monitor_task():
     """Tâche de fond qui surveille Vinted et poste les nouvelles annonces."""
     await bot.wait_until_ready()
@@ -339,16 +338,13 @@ async def vinted_monitor_task():
 
     vinted_client = VintedClient(search_url=search_url)
     
-    # ===> PARTIE AJOUTÉE POUR CORRIGER L'ERREUR 403 <===
     if not await vinted_client.initialize_session():
         print("Échec de l'initialisation du client Vinted. Arrêt de la tâche.")
         await channel.send("❌ Impossible de se connecter à Vinted pour le moment. Le moniteur n'a pas pu démarrer.")
         return
-    # ===> FIN DE LA PARTIE AJOUTÉE <===
     
     print(f"La surveillance Vinted va démarrer dans le salon #{channel.name}.")
 
-    # ===> AJOUT DE TRY...FINALLY POUR BIEN FERMER LA SESSION <===
     try:
         while not bot.is_closed():
             try:
@@ -360,7 +356,7 @@ async def vinted_monitor_task():
                 await asyncio.sleep(delay)
             except asyncio.CancelledError:
                 print("La tâche de surveillance Vinted a été arrêtée.")
-                break # Sort de la boucle while
+                break
             except Exception as e:
                 print(f"ERREUR dans la boucle Vinted : {e}")
                 await asyncio.sleep(delay * 2)
@@ -447,4 +443,5 @@ class MainStockButton(discord.ui.View):
 # Lancer le keep-alive avant le bot
 keep_alive()
 bot.run(TOKEN)
+
 
