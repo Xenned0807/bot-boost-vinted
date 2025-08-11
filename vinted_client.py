@@ -20,21 +20,30 @@ class VintedClient:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
         }
-        self.session = aiohttp.ClientSession(headers=headers)
         
-        # Visiter la page d'accueil pour obtenir les cookies nécessaires
         try:
+            self.session = aiohttp.ClientSession(headers=headers)
             logging.info("Tentative d'obtention du cookie de session Vinted...")
+            
             async with self.session.get("https://www.vinted.fr/") as response:
                 response.raise_for_status()
-                # Le cookie est maintenant stocké dans le "cookie_jar" de la session
                 logging.info("Cookie de session obtenu avec succès.")
                 return True
+        
+        # === AMÉLIORATION : Gérer TOUTES les erreurs possibles ===
         except aiohttp.ClientError as e:
-            logging.error(f"Impossible d'obtenir le cookie de session Vinted : {e}")
-            await self.session.close() # Nettoyer la session en cas d'échec
+            logging.error(f"ERREUR AIOHTTP lors de l'initialisation de Vinted : {e}")
+            if self.session and not self.session.closed:
+                await self.session.close()
             self.session = None
             return False
+        except Exception as e:
+            logging.error(f"ERREUR INATTENDUE lors de l'initialisation de Vinted : {e}")
+            if self.session and not self.session.closed:
+                await self.session.close()
+            self.session = None
+            return False
+        # === FIN DE L'AMÉLIORATION ===
 
     async def search_new_items(self) -> list:
         if not self.session or self.session.closed:
@@ -45,7 +54,7 @@ class VintedClient:
             api_search_url = f"https://www.vinted.fr/api/v2/catalog/items?{self.search_url.split('?')[-1]}"
             async with self.session.get(api_search_url) as response:
                 if response.status == 403:
-                    logging.error("Erreur 403 Forbidden. Vinted bloque la requête. Il est possible que l'IP soit bannie ou que le cookie ait expiré.")
+                    logging.error("Erreur 403 Forbidden. Vinted bloque la requête.")
                     return []
                 response.raise_for_status()
                 data = await response.json()
@@ -65,12 +74,8 @@ class VintedClient:
                         logging.info(f"Détection Vinted : {len(new_items)} nouveaux articles trouvés !")
                     self.seen_item_ids.update(new_item_ids)
                 return new_items
-
-        except aiohttp.ClientError as e:
-            logging.error(f"Erreur API Vinted lors de la recherche : {e}")
-            return []
         except Exception as e:
-            logging.error(f"Erreur inattendue dans VintedClient : {e}")
+            logging.error(f"Erreur inattendue lors de la recherche Vinted : {e}")
             return []
             
     async def close_session(self):
